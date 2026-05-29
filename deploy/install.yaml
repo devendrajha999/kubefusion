@@ -188,7 +188,13 @@ kind: Ingress
 metadata:
   name: kubefusion
   namespace: gitops-platform
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
 spec:
+  ingressClassName: alb
   rules:
   - host: kubefusion.local
     http:
@@ -215,5 +221,6 @@ spec:
   egress:
   - to:
     - podSelector: {}
+
 
 
