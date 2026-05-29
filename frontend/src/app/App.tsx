@@ -12,7 +12,7 @@ import { AuditPage } from '../pages/AuditPage'
 import { LoginPage } from '../pages/LoginPage'
 import { clearToken, getToken } from '../lib/api'
 
-const nav = ['Dashboard', 'Applications', 'Repositories', 'Clusters', 'Pods', 'Metrics', 'Audit']
+const nav = ['Dashboard', 'Applications', 'Clusters', 'Workloads', 'Repositories', 'Metrics', 'Audit']
 
 export function App() {
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -20,24 +20,27 @@ export function App() {
   const [token, setAuthToken] = useState(getToken())
   const theme = useMemo(() => createTheme({ palette: { mode } }), [mode])
 
-  if (!token) {
-    return <ThemeProvider theme={theme}><CssBaseline /><LoginPage onLogin={() => setAuthToken(getToken())} /></ThemeProvider>
-  }
+  if (!token) return <ThemeProvider theme={theme}><CssBaseline /><LoginPage onLogin={() => setAuthToken(getToken())} /></ThemeProvider>
 
   return <ThemeProvider theme={theme}><CssBaseline />
     <Box sx={{ display: 'flex' }}>
       <AppBar position='fixed'><Toolbar>
         <IconButton color='inherit' edge='start' onClick={() => setMobileOpen(!mobileOpen)} sx={{ mr: 2 }}><MenuIcon /></IconButton>
-        <Typography variant='h6' sx={{ flexGrow: 1 }}>KubeFusion</Typography>
+        <Typography variant='h6' sx={{ flexGrow: 1 }}>KubeFusion Navigator</Typography>
         <Button color='inherit' onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}>Theme</Button>
         <Button color='inherit' onClick={() => { clearToken(); setAuthToken('') }}>Logout</Button>
       </Toolbar></AppBar>
-      <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)}>
-        <List sx={{ width: 260 }}>
-          {nav.map(n => <ListItemButton key={n} component={Link} to={n === 'Dashboard' ? '/' : '/' + n.toLowerCase()} onClick={() => setMobileOpen(false)}><ListItemText primary={n} /></ListItemButton>)}
+      <Drawer variant='permanent' sx={{ width: 260, display: { xs: 'none', md: 'block' }, '& .MuiDrawer-paper': { width: 260, boxSizing: 'border-box', mt: 8 } }}>
+        <List>
+          {nav.map(n => <ListItemButton key={n} component={Link} to={n === 'Dashboard' ? '/' : '/' + (n === 'Workloads' ? 'pods' : n.toLowerCase())}><ListItemText primary={n} /></ListItemButton>)}
         </List>
       </Drawer>
-      <Box component='main' sx={{ flexGrow: 1, p: 3, mt: 8 }}>
+      <Drawer open={mobileOpen} onClose={() => setMobileOpen(false)} sx={{ display: { md: 'none' } }}>
+        <List sx={{ width: 260 }}>
+          {nav.map(n => <ListItemButton key={n} component={Link} to={n === 'Dashboard' ? '/' : '/' + (n === 'Workloads' ? 'pods' : n.toLowerCase())} onClick={() => setMobileOpen(false)}><ListItemText primary={n} /></ListItemButton>)}
+        </List>
+      </Drawer>
+      <Box component='main' sx={{ flexGrow: 1, p: 3, mt: 8, ml: { md: '260px' } }}>
         <Routes>
           <Route path='/' element={<DashboardPage />} />
           <Route path='/applications' element={<ApplicationsPage />} />

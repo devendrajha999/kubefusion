@@ -5,12 +5,16 @@ import { api, setToken } from '../lib/api'
 type LoginResponse = { token: string; role: string }
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('admin')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
   const submit = async () => {
+    if (!username || !password) {
+      setError('Username and password are required')
+      return
+    }
     setLoading(true)
     setError('')
     try {
@@ -20,7 +24,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
       })
       setToken(data.token)
       onLogin()
-    } catch (e) {
+    } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Login failed')
     } finally {
       setLoading(false)
