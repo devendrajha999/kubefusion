@@ -1,0 +1,22 @@
+syntax = "proto3";
+package kubefusion.v1;
+
+option go_package = "github.com/kubefusion/kubefusion/proto;kubefusionv1";
+
+service ApplicationService {
+  rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse);
+}
+
+message ListApplicationsRequest {}
+
+message Application {
+  string id = 1;
+  string name = 2;
+  string project = 3;
+  string sync_status = 4;
+  string health = 5;
+}
+
+message ListApplicationsResponse {
+  repeated Application items = 1;
+}

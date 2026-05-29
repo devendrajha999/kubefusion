@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubefusion-frontend
+  namespace: gitops-platform
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: kubefusion-frontend } }
+  template:
+    metadata: { labels: { app: kubefusion-frontend } }
+    spec:
+      containers:
+      - name: frontend
+        image: kubefusion/frontend:latest
+        ports: [{ containerPort: 80 }]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubefusion-frontend
+  namespace: gitops-platform
+spec:
+  selector: { app: kubefusion-frontend }
+  ports: [{ name: http, port: 80, targetPort: 80 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubefusion
+  namespace: gitops-platform
+spec:
+  rules:
+  - host: kubefusion.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service: { name: kubefusion-frontend, port: { number: 80 } }

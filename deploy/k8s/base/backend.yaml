@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubefusion-backend
+  namespace: gitops-platform
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: kubefusion-backend } }
+  template:
+    metadata:
+      labels: { app: kubefusion-backend }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: kubefusion-backend
+      containers:
+      - name: backend
+        image: kubefusion/backend:latest
+        ports: [{ containerPort: 8080 }]
+        env:
+        - { name: POSTGRES_DSN, valueFrom: { secretKeyRef: { name: kubefusion-secrets, key: postgres_dsn } } }
+        - { name: REDIS_ADDR, value: "redis:6379" }
+        - { name: JWT_SECRET, valueFrom: { secretKeyRef: { name: kubefusion-secrets, key: jwt_secret } } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubefusion-backend
+  namespace: gitops-platform
+spec:
+  selector: { app: kubefusion-backend }
+  ports: [{ name: http, port: 8080, targetPort: 8080 }]

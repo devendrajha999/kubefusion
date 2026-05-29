@@ -1,0 +1,7 @@
+namespace: gitops-platform
+image:
+  backend: kubefusion/backend:latest
+  frontend: kubefusion/frontend:latest
+service:
+  backendPort: 8080
+  frontendPort: 80
