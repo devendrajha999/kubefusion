@@ -126,6 +126,7 @@ spec:
       containers:
       - name: backend
         image: jhadevendra999/backend-image:latest
+        imagePullPolicy: Always
         ports: [{ containerPort: 8080 }]
         env:
         - name: POSTGRES_DSN
@@ -167,6 +168,7 @@ spec:
       containers:
       - name: frontend
         image: jhadevendra999/frontend-image:latest
+        imagePullPolicy: Always
         ports: [{ containerPort: 80 }]
 ---
 apiVersion: v1
@@ -213,3 +215,5 @@ spec:
   egress:
   - to:
     - podSelector: {}
+
+
