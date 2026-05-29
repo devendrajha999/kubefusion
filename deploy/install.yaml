@@ -11,7 +11,7 @@ metadata:
 type: Opaque
 stringData:
   postgres_dsn: postgres://kubefusion:kubefusion@postgres:5432/kubefusion?sslmode=disable
-  jwt_secret: KubeFusion_JWT_2026_X9!mQ7#vLp2@rT8$zN4
+  jwt_secret: KubeFusion_JWT_2026_X9_mQ7_vLp2_rT8_zN4
 ---
 apiVersion: v1
 kind: ConfigMap
