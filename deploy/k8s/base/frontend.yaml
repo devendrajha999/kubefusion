@@ -32,13 +32,16 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
-    alb.ingress.kubernetes.io/healthcheck-path: /healthz
 spec:
   ingressClassName: alb
   rules:
-  - host: kubefusion.local
+  - host: kubefusion.patientpay.net
     http:
       paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service: { name: kubefusion-backend, port: { number: 8080 } }
       - path: /
         pathType: Prefix
         backend:

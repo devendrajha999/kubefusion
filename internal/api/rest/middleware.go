@@ -9,12 +9,19 @@ import (
 
 func requireAuth(secret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		token := ""
 		h := c.GetHeader("Authorization")
-		if h == "" || !strings.HasPrefix(h, "Bearer ") {
+		if strings.HasPrefix(h, "Bearer ") {
+			token = strings.TrimPrefix(h, "Bearer ")
+		}
+		if token == "" {
+			token = c.Query("token")
+		}
+		if token == "" {
 			c.AbortWithStatusJSON(401, gin.H{"error": "missing bearer token"})
 			return
 		}
-		claims, err := auth.Parse(secret, strings.TrimPrefix(h, "Bearer "))
+		claims, err := auth.Parse(secret, token)
 		if err != nil {
 			c.AbortWithStatusJSON(401, gin.H{"error": "invalid token"})
 			return

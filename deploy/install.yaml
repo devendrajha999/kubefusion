@@ -34,11 +34,11 @@ metadata:
   name: kubefusion-cluster-reader
 rules:
 - apiGroups: [""]
-  resources: ["pods","nodes","services","events","namespaces","persistentvolumeclaims","persistentvolumes"]
-  verbs: ["get","list","watch"]
+  resources: ["pods", "nodes", "services", "events", "namespaces", "persistentvolumeclaims", "persistentvolumes"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["apps"]
-  resources: ["deployments","statefulsets","daemonsets","replicasets"]
-  verbs: ["get","list","watch"]
+  resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+  verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -60,18 +60,26 @@ metadata:
   namespace: gitops-platform
 spec:
   replicas: 1
-  selector: { matchLabels: { app: postgres } }
+  selector:
+    matchLabels:
+      app: postgres
   template:
-    metadata: { labels: { app: postgres } }
+    metadata:
+      labels:
+        app: postgres
     spec:
       containers:
       - name: postgres
         image: postgres:16
         env:
-        - { name: POSTGRES_DB, value: kubefusion }
-        - { name: POSTGRES_USER, value: kubefusion }
-        - { name: POSTGRES_PASSWORD, value: kubefusion }
-        ports: [{ containerPort: 5432 }]
+        - name: POSTGRES_DB
+          value: kubefusion
+        - name: POSTGRES_USER
+          value: kubefusion
+        - name: POSTGRES_PASSWORD
+          value: kubefusion
+        ports:
+        - containerPort: 5432
 ---
 apiVersion: v1
 kind: Service
@@ -79,8 +87,11 @@ metadata:
   name: postgres
   namespace: gitops-platform
 spec:
-  selector: { app: postgres }
-  ports: [{ port: 5432, targetPort: 5432 }]
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -89,14 +100,19 @@ metadata:
   namespace: gitops-platform
 spec:
   replicas: 1
-  selector: { matchLabels: { app: redis } }
+  selector:
+    matchLabels:
+      app: redis
   template:
-    metadata: { labels: { app: redis } }
+    metadata:
+      labels:
+        app: redis
     spec:
       containers:
       - name: redis
         image: redis:7
-        ports: [{ containerPort: 6379 }]
+        ports:
+        - containerPort: 6379
 ---
 apiVersion: v1
 kind: Service
@@ -104,8 +120,11 @@ metadata:
   name: redis
   namespace: gitops-platform
 spec:
-  selector: { app: redis }
-  ports: [{ port: 6379, targetPort: 6379 }]
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -114,10 +133,13 @@ metadata:
   namespace: gitops-platform
 spec:
   replicas: 2
-  selector: { matchLabels: { app: kubefusion-backend } }
+  selector:
+    matchLabels:
+      app: kubefusion-backend
   template:
     metadata:
-      labels: { app: kubefusion-backend }
+      labels:
+        app: kubefusion-backend
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8080"
@@ -127,7 +149,8 @@ spec:
       - name: backend
         image: jhadevendra999/backend-image:latest
         imagePullPolicy: Always
-        ports: [{ containerPort: 8080 }]
+        ports:
+        - containerPort: 8080
         env:
         - name: POSTGRES_DSN
           valueFrom:
@@ -135,7 +158,7 @@ spec:
               name: kubefusion-secrets
               key: postgres_dsn
         - name: REDIS_ADDR
-          value: "redis:6379"
+          value: redis:6379
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
@@ -148,7 +171,8 @@ metadata:
   name: kubefusion-backend
   namespace: gitops-platform
 spec:
-  selector: { app: kubefusion-backend }
+  selector:
+    app: kubefusion-backend
   ports:
   - name: http
     port: 8080
@@ -161,15 +185,20 @@ metadata:
   namespace: gitops-platform
 spec:
   replicas: 2
-  selector: { matchLabels: { app: kubefusion-frontend } }
+  selector:
+    matchLabels:
+      app: kubefusion-frontend
   template:
-    metadata: { labels: { app: kubefusion-frontend } }
+    metadata:
+      labels:
+        app: kubefusion-frontend
     spec:
       containers:
       - name: frontend
         image: jhadevendra999/frontend-image:latest
         imagePullPolicy: Always
-        ports: [{ containerPort: 80 }]
+        ports:
+        - containerPort: 80
 ---
 apiVersion: v1
 kind: Service
@@ -177,7 +206,8 @@ metadata:
   name: kubefusion-frontend
   namespace: gitops-platform
 spec:
-  selector: { app: kubefusion-frontend }
+  selector:
+    app: kubefusion-frontend
   ports:
   - name: http
     port: 80
@@ -192,13 +222,19 @@ metadata:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
-    alb.ingress.kubernetes.io/healthcheck-path: /healthz
 spec:
   ingressClassName: alb
   rules:
-  - host: kubefusion.local
+  - host: kubefusion.patientpay.net
     http:
       paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: kubefusion-backend
+            port:
+              number: 8080
       - path: /
         pathType: Prefix
         backend:
@@ -214,13 +250,10 @@ metadata:
   namespace: gitops-platform
 spec:
   podSelector: {}
-  policyTypes: [Ingress,Egress]
+  policyTypes: [Ingress, Egress]
   ingress:
   - from:
     - podSelector: {}
   egress:
   - to:
     - podSelector: {}
-
-
-
