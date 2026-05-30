@@ -1,36 +1,60 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Box, Button, Checkbox, Dialog, DialogContent, DialogTitle, FormControl, InputLabel, List, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, Collapse, Dialog, DialogContent, DialogTitle, FormControl, InputLabel, List, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { api, getToken } from '../lib/api'
 
 type NamespaceItem = { name: string; status: string }
 type Row = Record<string, string | number | boolean | null | undefined>
 
 type KindDef = { id: string; label: string }
-
-const KINDS: KindDef[] = [
-  { id: 'pods', label: 'Pods' },
-  { id: 'deployments', label: 'Deployments' },
-  { id: 'statefulsets', label: 'StatefulSets' },
-  { id: 'daemonsets', label: 'DaemonSets' },
-  { id: 'replicasets', label: 'ReplicaSets' },
-  { id: 'jobs', label: 'Jobs' },
-  { id: 'cronjobs', label: 'CronJobs' },
-  { id: 'services', label: 'Services' },
-  { id: 'ingresses', label: 'Ingresses' },
-  { id: 'configmaps', label: 'ConfigMaps' },
-  { id: 'secrets', label: 'Secrets' },
-  { id: 'persistentvolumeclaims', label: 'PersistentVolumeClaims' },
-  { id: 'persistentvolumes', label: 'PersistentVolumes' },
-  { id: 'storageclasses', label: 'StorageClasses' },
-  { id: 'namespaces', label: 'Namespaces' },
-  { id: 'events', label: 'Events' },
-  { id: 'nodes', label: 'Nodes' },
+type Group = { id: string; label: string; children?: KindDef[]; kind?: string }
+const GROUPS: Group[] = [
+  { id: 'overview', label: 'Overview', kind: 'pods' },
+  { id: 'applications', label: 'Applications', kind: 'deployments' },
+  { id: 'nodes', label: 'Nodes', kind: 'nodes' },
+  {
+    id: 'workloads', label: 'Workloads', children: [
+      { id: 'pods', label: 'Pods' },
+      { id: 'deployments', label: 'Deployments' },
+      { id: 'daemonsets', label: 'Daemon Sets' },
+      { id: 'statefulsets', label: 'Stateful Sets' },
+      { id: 'replicasets', label: 'Replica Sets' },
+      { id: 'jobs', label: 'Jobs' },
+      { id: 'cronjobs', label: 'Cron Jobs' },
+    ]
+  },
+  {
+    id: 'config', label: 'Config', children: [
+      { id: 'configmaps', label: 'Config Maps' },
+      { id: 'secrets', label: 'Secrets' },
+    ]
+  },
+  {
+    id: 'network', label: 'Network', children: [
+      { id: 'services', label: 'Services' },
+      { id: 'ingresses', label: 'Ingresses' },
+    ]
+  },
+  {
+    id: 'storage', label: 'Storage', children: [
+      { id: 'persistentvolumeclaims', label: 'Persistent Volume Claims' },
+      { id: 'persistentvolumes', label: 'Persistent Volumes' },
+      { id: 'storageclasses', label: 'Storage Classes' },
+    ]
+  },
+  { id: 'namespaces', label: 'Namespaces', kind: 'namespaces' },
+  { id: 'events', label: 'Events', kind: 'events' },
+  { id: 'helm', label: 'Helm', kind: 'deployments' },
+  { id: 'access-control', label: 'Access Control', kind: 'nodes' },
+  { id: 'custom-resources', label: 'Custom Resources', kind: 'events' },
 ]
 
 const podKinds = new Set(['pods'])
 
 export function PodsPage() {
   const [kind, setKind] = useState('pods')
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    workloads: true, config: true, network: true, storage: true,
+  })
   const [namespaces, setNamespaces] = useState<NamespaceItem[]>([])
   const [selectedNamespaces, setSelectedNamespaces] = useState<string[]>([])
   const [query, setQuery] = useState('')
@@ -73,7 +97,9 @@ export function PodsPage() {
   const columns = useMemo(() => {
     const keys = new Set<string>()
     filtered.forEach(r => Object.keys(r).forEach(k => keys.add(k)))
-    return Array.from(keys)
+    const ordered = ['name', 'namespace', 'status', 'containers', 'cpu', 'memory', 'restarts', 'controlledBy', 'node', 'qos', 'age', 'replicas', 'ready', 'updated', 'type', 'host', 'reason', 'message']
+    const all = Array.from(keys)
+    return [...ordered.filter(k => keys.has(k)), ...all.filter(k => !ordered.includes(k))]
   }, [filtered])
 
   const fetchLogs = async () => {
@@ -116,7 +142,22 @@ export function PodsPage() {
       <Paper sx={{ p: 1, maxHeight: 600, overflow: 'auto' }}>
         <Typography variant='subtitle1' sx={{ px: 1, py: 1 }}>Navigator</Typography>
         <List dense>
-          {KINDS.map(k => <ListItemButton key={k.id} selected={kind === k.id} onClick={() => setKind(k.id)}><ListItemText primary={k.label} /></ListItemButton>)}
+          {GROUPS.map(g => g.children ? (
+            <Box key={g.id}>
+              <ListItemButton onClick={() => setOpenGroups(prev => ({ ...prev, [g.id]: !prev[g.id] }))}>
+                <ListItemText primary={g.label} />
+              </ListItemButton>
+              <Collapse in={!!openGroups[g.id]}>
+                <List dense sx={{ pl: 2 }}>
+                  {g.children.map(c => <ListItemButton key={c.id} selected={kind === c.id} onClick={() => setKind(c.id)}><ListItemText primary={c.label} /></ListItemButton>)}
+                </List>
+              </Collapse>
+            </Box>
+          ) : (
+            <ListItemButton key={g.id} selected={g.kind === kind} onClick={() => g.kind && setKind(g.kind)}>
+              <ListItemText primary={g.label} />
+            </ListItemButton>
+          ))}
         </List>
       </Paper>
       <Stack spacing={2}>
