@@ -13,6 +13,7 @@ type Config struct {
 	JWTSecret     string
 	KubeConfig    string
 	OTLPEndpoint  string
+	PrometheusURL string
 }
 
 func Load() Config {
@@ -25,6 +26,7 @@ func Load() Config {
 		JWTSecret:     get("JWT_SECRET", "change-me"),
 		KubeConfig:    get("KUBECONFIG", ""),
 		OTLPEndpoint:  get("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317"),
+		PrometheusURL: get("PROMETHEUS_URL", "http://prometheus-operated.monitoring.svc.cluster.local:9090"),
 	}
 }
 

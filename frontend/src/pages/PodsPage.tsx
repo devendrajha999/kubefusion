@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Box, Button, FormControl, InputLabel, List, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, FormControl, InputLabel, List, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { api, getToken } from '../lib/api'
 
 type NamespaceItem = { name: string; status: string }
@@ -32,7 +32,7 @@ const podKinds = new Set(['pods'])
 export function PodsPage() {
   const [kind, setKind] = useState('pods')
   const [namespaces, setNamespaces] = useState<NamespaceItem[]>([])
-  const [namespace, setNamespace] = useState('')
+  const [selectedNamespaces, setSelectedNamespaces] = useState<string[]>([])
   const [query, setQuery] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [error, setError] = useState('')
@@ -51,8 +51,7 @@ export function PodsPage() {
   const loadRows = async () => {
     try {
       setError('')
-      const nsQuery = namespace && !['nodes', 'persistentvolumes', 'storageclasses', 'namespaces'].includes(kind) ? `?namespace=${encodeURIComponent(namespace)}` : ''
-      const data = await api<Row[]>(`/api/v1/clusters/in-cluster/resources/${kind}${nsQuery}`)
+      const data = await api<Row[]>(`/api/v1/clusters/in-cluster/resources/${kind}`)
       setRows(data)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Load failed')
@@ -61,9 +60,14 @@ export function PodsPage() {
   }
 
   useEffect(() => { loadNamespaces() }, [])
-  useEffect(() => { loadRows() }, [kind, namespace])
+  useEffect(() => { loadRows() }, [kind])
 
-  const filtered = useMemo(() => rows.filter(r => JSON.stringify(r).toLowerCase().includes(query.toLowerCase())), [rows, query])
+  const filtered = useMemo(() => rows.filter(r => {
+    const matchText = JSON.stringify(r).toLowerCase().includes(query.toLowerCase())
+    const ns = typeof r.namespace === 'string' ? r.namespace : ''
+    const matchNs = selectedNamespaces.length === 0 || selectedNamespaces.includes(ns)
+    return matchText && matchNs
+  }), [rows, query, selectedNamespaces])
   const columns = useMemo(() => {
     const keys = new Set<string>()
     filtered.forEach(r => Object.keys(r).forEach(k => keys.add(k)))
@@ -71,7 +75,7 @@ export function PodsPage() {
   }, [filtered])
 
   const fetchLogs = async () => {
-    const ns = namespace || String(filtered.find(r => String(r.name) === targetPod)?.namespace || 'default')
+    const ns = String(filtered.find(r => String(r.name) === targetPod)?.namespace || selectedNamespaces[0] || 'default')
     const data = await api<{ lines: string[] }>('/api/v1/clusters/in-cluster/pods/logs', { method: 'POST', body: JSON.stringify({ cluster: 'in-cluster', namespace: ns, pod: targetPod, container, tailLines: 200 }) })
     setLogs(data.lines || [])
   }
@@ -79,7 +83,7 @@ export function PodsPage() {
   const startStream = () => {
     if (evt.current) evt.current.close()
     const token = encodeURIComponent(getToken())
-    const ns = encodeURIComponent(namespace || 'default')
+    const ns = encodeURIComponent(String(filtered.find(r => String(r.name) === targetPod)?.namespace || selectedNamespaces[0] || 'default'))
     const es = new EventSource(`/api/v1/clusters/in-cluster/pods/logs/stream?namespace=${ns}&pod=${encodeURIComponent(targetPod)}&container=${encodeURIComponent(container)}&token=${token}`)
     es.onmessage = (e) => setLogs(prev => [...prev.slice(-500), e.data])
     es.onerror = () => es.close()
@@ -87,7 +91,7 @@ export function PodsPage() {
   }
 
   const runExec = async () => {
-    const data = await api<{ stdout?: string; stderr?: string; error?: string }>('/api/v1/clusters/in-cluster/pods/exec', { method: 'POST', body: JSON.stringify({ namespace: namespace || 'default', pod: targetPod, container, command: ['/bin/sh', '-c', command] }) })
+    const data = await api<{ stdout?: string; stderr?: string; error?: string }>('/api/v1/clusters/in-cluster/pods/exec', { method: 'POST', body: JSON.stringify({ namespace: selectedNamespaces[0] || 'default', pod: targetPod, container, command: ['/bin/sh', '-c', command] }) })
     setExecOut((data.stdout || '') + (data.stderr ? '\nERR:\n' + data.stderr : '') + (data.error ? '\nERROR: ' + data.error : ''))
   }
 
@@ -104,10 +108,16 @@ export function PodsPage() {
       <Stack spacing={2}>
         <Stack direction='row' spacing={2}>
           <FormControl sx={{ minWidth: 240 }}>
-            <InputLabel id='ns-label'>Namespace</InputLabel>
-            <Select labelId='ns-label' label='Namespace' value={namespace} onChange={e => setNamespace(e.target.value)}>
-              <MenuItem value=''>All namespaces</MenuItem>
-              {namespaces.map(n => <MenuItem key={n.name} value={n.name}>{n.name}</MenuItem>)}
+            <InputLabel id='ns-label'>Namespaces</InputLabel>
+            <Select
+              multiple
+              labelId='ns-label'
+              label='Namespaces'
+              value={selectedNamespaces}
+              renderValue={(v) => (v as string[]).length ? (v as string[]).join(', ') : 'All namespaces'}
+              onChange={e => setSelectedNamespaces(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+            >
+              {namespaces.map(n => <MenuItem key={n.name} value={n.name}><Checkbox checked={selectedNamespaces.includes(n.name)} /><ListItemText primary={n.name} /></MenuItem>)}
             </Select>
           </FormControl>
           <TextField label={`Search ${kind}`} value={query} onChange={e => setQuery(e.target.value)} sx={{ minWidth: 280 }} />
@@ -117,7 +127,7 @@ export function PodsPage() {
           <Table size='small'>
             <TableHead><TableRow>{columns.map(c => <TableCell key={c}>{c}</TableCell>)}</TableRow></TableHead>
             <TableBody>
-              {filtered.map((r, i) => <TableRow key={i} onClick={() => { if (kind === 'pods' && typeof r.name === 'string') { setTargetPod(r.name); if (typeof r.namespace === 'string') setNamespace(r.namespace) } }}>{columns.map(c => <TableCell key={c}>{String(r[c] ?? '')}</TableCell>)}</TableRow>)}
+              {filtered.map((r, i) => <TableRow key={i} onClick={() => { if (kind === 'pods' && typeof r.name === 'string') { setTargetPod(r.name) } }}>{columns.map(c => <TableCell key={c}>{String(r[c] ?? '')}</TableCell>)}</TableRow>)}
             </TableBody>
           </Table>
         </Paper>

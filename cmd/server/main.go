@@ -48,7 +48,7 @@ func main() {
 
 	r := gin.New()
 	r.Use(gin.Recovery(), otelgin.Middleware("kubefusion-http"))
-	rest.New(cfg.JWTSecret, kubeClient, db).Register(r)
+	rest.New(cfg.JWTSecret, kubeClient, db, cfg.PrometheusURL).Register(r)
 
 	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: r, ReadHeaderTimeout: 5 * time.Second}
 	go func() {

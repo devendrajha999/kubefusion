@@ -9,7 +9,7 @@ export function ClustersPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
-    api<Cluster[]>('/api/v1/clusters').then(setClusters).catch(e => {
+    api<Cluster[]>('/api/v1/clusters').then(setClusters).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : 'Failed to load clusters')
       setClusters([])
     })
@@ -17,3 +17,4 @@ export function ClustersPage() {
 
   return <>{error && <Alert severity='error' sx={{ mb: 2 }}>{error}</Alert>}<Typography variant='h5' sx={{ mb: 2 }}>Clusters</Typography><Paper><Table><TableHead><TableRow><TableCell>Name</TableCell><TableCell>Status</TableCell><TableCell>Server</TableCell></TableRow></TableHead><TableBody>{clusters.map(c => <TableRow key={c.name}><TableCell>{c.name}</TableCell><TableCell>{c.status}</TableCell><TableCell>{c.server}</TableCell></TableRow>)}</TableBody></Table></Paper></>
 }
+

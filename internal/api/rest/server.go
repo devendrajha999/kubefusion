@@ -2,8 +2,11 @@ package rest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,10 +28,11 @@ type Server struct {
 	Audit          *audit.Store
 	Kube           *kube.Client
 	DB             *pgxpool.Pool
+	PrometheusURL  string
 }
 
-func New(jwtSecret string, kubeClient *kube.Client, db *pgxpool.Pool) *Server {
-	return &Server{JWTSecret: jwtSecret, Apps: []models.Application{}, Revisions: map[string][]models.ApplicationRevision{}, RepoCreds: []models.RepositoryCredential{}, SyncWindowOpen: true, GitOps: gitops.NewEngine(), Audit: audit.NewStore(), Kube: kubeClient, DB: db}
+func New(jwtSecret string, kubeClient *kube.Client, db *pgxpool.Pool, prometheusURL string) *Server {
+	return &Server{JWTSecret: jwtSecret, Apps: []models.Application{}, Revisions: map[string][]models.ApplicationRevision{}, RepoCreds: []models.RepositoryCredential{}, SyncWindowOpen: true, GitOps: gitops.NewEngine(), Audit: audit.NewStore(), Kube: kubeClient, DB: db, PrometheusURL: prometheusURL}
 }
 
 func (s *Server) Register(r *gin.Engine) { /* unchanged */
@@ -51,6 +55,7 @@ func (s *Server) Register(r *gin.Engine) { /* unchanged */
 		a.GET("/clusters/:name/pods", s.listPods)
 		a.GET("/clusters/:name/deployments", s.listDeployments)
 		a.GET("/clusters/:name/resources/:kind", s.listResourceByKind)
+		a.GET("/metrics/overview", s.metricsOverview)
 		a.POST("/clusters/:name/pods/logs", s.getPodLogs)
 		a.GET("/clusters/:name/pods/logs/stream", s.streamPodLogs)
 		a.POST("/clusters/:name/pods/exec", requireRole("admin", "operator"), s.execPod)
@@ -115,4 +120,54 @@ func (s *Server) listAudit(c *gin.Context) {
 		if err == nil { c.JSON(http.StatusOK, e); return }
 	}
 	c.JSON(http.StatusOK, s.Audit.List())
+}
+
+func (s *Server) metricsOverview(c *gin.Context) {
+	queries := map[string]string{
+		"clusterCpu":    "sum(rate(container_cpu_usage_seconds_total[5m]))",
+		"clusterMemory": "sum(container_memory_working_set_bytes)",
+		"podRestarts":   "sum(kube_pod_container_status_restarts_total)",
+		"nodeReady":     "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})",
+	}
+	out := map[string]interface{}{}
+	for k, q := range queries {
+		v, err := s.promQuery(c.Request.Context(), q)
+		if err != nil {
+			out[k] = 0.0
+			continue
+		}
+		out[k] = v
+	}
+	c.JSON(http.StatusOK, out)
+}
+
+func (s *Server) promQuery(ctx context.Context, query string) (float64, error) {
+	if s.PrometheusURL == "" {
+		return 0, fmt.Errorf("prometheus url is empty")
+	}
+	u := s.PrometheusURL + "/api/v1/query?query=" + url.QueryEscape(query)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	var payload struct {
+		Data struct {
+			Result []struct {
+				Value []interface{} `json:"value"`
+			} `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(b, &payload); err != nil {
+		return 0, err
+	}
+	if len(payload.Data.Result) == 0 || len(payload.Data.Result[0].Value) < 2 {
+		return 0, nil
+	}
+	vstr, _ := payload.Data.Result[0].Value[1].(string)
+	var f float64
+	_, err = fmt.Sscanf(vstr, "%f", &f)
+	return f, err
 }

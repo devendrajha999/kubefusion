@@ -8,6 +8,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -70,7 +71,17 @@ func (c *Client) ListPods(ctx context.Context, namespace string) ([]map[string]i
 	}
 	out := make([]map[string]interface{}, 0, len(pods.Items))
 	for _, p := range pods.Items {
-		out = append(out, map[string]interface{}{"namespace": p.Namespace, "name": p.Name, "status": string(p.Status.Phase), "restarts": restarts(p)})
+		out = append(out, map[string]interface{}{
+			"namespace":    p.Namespace,
+			"name":         p.Name,
+			"status":       string(p.Status.Phase),
+			"restarts":     restarts(p),
+			"node":         p.Spec.NodeName,
+			"qos":          string(p.Status.QOSClass),
+			"age":          age(p.CreationTimestamp.Time),
+			"controlledBy": controlledBy(p.OwnerReferences),
+			"containers":   len(p.Spec.Containers),
+		})
 	}
 	return out, nil
 }
@@ -218,6 +229,7 @@ func deploymentSummary(d appsv1.Deployment) map[string]interface{} {
 		"replicas":  d.Status.Replicas,
 		"ready":     ready,
 		"updated":   d.Status.UpdatedReplicas,
+		"age":       age(d.CreationTimestamp.Time),
 	}
 }
 
@@ -315,4 +327,22 @@ func (c *Client) listEvents(ctx context.Context, namespace string) ([]map[string
 	out := make([]map[string]interface{}, 0, len(items.Items))
 	for _, x := range items.Items { out = append(out, map[string]interface{}{"namespace": x.Namespace, "name": x.Name, "reason": x.Reason, "type": x.Type, "message": x.Message}) }
 	return out, nil
+}
+
+func age(t time.Time) string {
+	d := time.Since(t)
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
+}
+
+func controlledBy(owners []metav1.OwnerReference) string {
+	if len(owners) == 0 {
+		return ""
+	}
+	return owners[0].Kind
 }
