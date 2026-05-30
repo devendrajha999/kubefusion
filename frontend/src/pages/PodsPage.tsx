@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Box, Button, Checkbox, FormControl, InputLabel, List, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, Dialog, DialogContent, DialogTitle, FormControl, InputLabel, List, ListItemButton, ListItemText, MenuItem, Paper, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { api, getToken } from '../lib/api'
 
 type NamespaceItem = { name: string; status: string }
@@ -42,6 +42,8 @@ export function PodsPage() {
   const [logs, setLogs] = useState<string[]>([])
   const [command, setCommand] = useState('ls -la')
   const [execOut, setExecOut] = useState('')
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsText, setDetailsText] = useState('')
   const evt = useRef<EventSource | null>(null)
 
   const loadNamespaces = async () => {
@@ -95,6 +97,18 @@ export function PodsPage() {
     setExecOut((data.stdout || '') + (data.stderr ? '\nERR:\n' + data.stderr : '') + (data.error ? '\nERROR: ' + data.error : ''))
   }
 
+  const openDetails = async (ns: string, pod: string) => {
+    const data = await api<Record<string, unknown>>(`/api/v1/clusters/in-cluster/pods/${encodeURIComponent(ns)}/${encodeURIComponent(pod)}`)
+    setDetailsText(JSON.stringify(data, null, 2))
+    setDetailsOpen(true)
+  }
+
+  const deletePod = async (ns: string, pod: string) => {
+    if (!confirm(`Delete pod ${ns}/${pod}?`)) return
+    await api('/api/v1/clusters/in-cluster/pods/' + encodeURIComponent(ns) + '/' + encodeURIComponent(pod), { method: 'DELETE' })
+    await loadRows()
+  }
+
   return <Stack spacing={2}>
     <Typography variant='h5'>Cluster Navigator</Typography>
     {error && <Alert severity='error'>{error}</Alert>}
@@ -125,9 +139,9 @@ export function PodsPage() {
         </Stack>
         <Paper>
           <Table size='small'>
-            <TableHead><TableRow>{columns.map(c => <TableCell key={c}>{c}</TableCell>)}</TableRow></TableHead>
+            <TableHead><TableRow>{columns.map(c => <TableCell key={c}>{c}</TableCell>)}{kind === 'pods' && <TableCell>Actions</TableCell>}</TableRow></TableHead>
             <TableBody>
-              {filtered.map((r, i) => <TableRow key={i} onClick={() => { if (kind === 'pods' && typeof r.name === 'string') { setTargetPod(r.name) } }}>{columns.map(c => <TableCell key={c}>{String(r[c] ?? '')}</TableCell>)}</TableRow>)}
+              {filtered.map((r, i) => <TableRow key={i} onClick={() => { if (kind === 'pods' && typeof r.name === 'string') { setTargetPod(r.name) } }}>{columns.map(c => <TableCell key={c}>{String(r[c] ?? '')}</TableCell>)}{kind === 'pods' && <TableCell><Stack direction='row' spacing={1}><Button size='small' onClick={() => { setTargetPod(String(r.name || '')); fetchLogs() }}>Logs</Button><Button size='small' onClick={() => { setTargetPod(String(r.name || '')); runExec() }}>Exec</Button><Button size='small' onClick={() => openDetails(String(r.namespace || ''), String(r.name || ''))}>View</Button><Button size='small' color='error' onClick={() => deletePod(String(r.namespace || ''), String(r.name || ''))}>Delete</Button></Stack></TableCell>}</TableRow>)}
             </TableBody>
           </Table>
         </Paper>
@@ -140,5 +154,9 @@ export function PodsPage() {
         <Paper sx={{ p: 2 }}><Stack spacing={2}><Typography variant='h6'>Pod Exec</Typography><TextField label='Shell Command' value={command} onChange={e => setCommand(e.target.value)} /><Button variant='contained' onClick={runExec}>Run Command</Button><pre>{execOut}</pre></Stack></Paper>
       </>
     )}
+    <Dialog open={detailsOpen} onClose={() => setDetailsOpen(false)} fullWidth maxWidth='md'>
+      <DialogTitle>Pod Details</DialogTitle>
+      <DialogContent><pre>{detailsText}</pre></DialogContent>
+    </Dialog>
   </Stack>
 }

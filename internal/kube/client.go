@@ -200,6 +200,30 @@ func (c *Client) ExecOnce(ctx context.Context, namespace, pod, container string,
 	return stdout.String(), stderr.String(), err
 }
 
+func (c *Client) DeletePod(ctx context.Context, namespace, pod string) error {
+	return c.Clientset.CoreV1().Pods(namespace).Delete(ctx, pod, metav1.DeleteOptions{})
+}
+
+func (c *Client) PodDetails(ctx context.Context, namespace, pod string) (map[string]interface{}, error) {
+	p, err := c.Clientset.CoreV1().Pods(namespace).Get(ctx, pod, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]interface{}{
+		"name":         p.Name,
+		"namespace":    p.Namespace,
+		"node":         p.Spec.NodeName,
+		"status":       string(p.Status.Phase),
+		"qos":          string(p.Status.QOSClass),
+		"ip":           p.Status.PodIP,
+		"labels":       p.Labels,
+		"annotations":  p.Annotations,
+		"containers":   p.Spec.Containers,
+		"createdAt":    p.CreationTimestamp.Time,
+		"controlledBy": controlledBy(p.OwnerReferences),
+	}, nil
+}
+
 func ScanLines(r io.Reader, fn func(string) error) error {
 	s := bufio.NewScanner(r)
 	for s.Scan() {
